@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}{{ lay.name }}{% endblock %}
+{% block content %}
+<div class="head"><div style="min-width:0;flex:1">
+<a class="muted" href="{{ url_for('layouts') }}">← All floor plans</a>
+<input id="title" class="titlein" value="{{ lay.name }}" maxlength="60" aria-label="Floor plan name">
+<p id="summary" class="muted"></p></div></div>
+
+<div class="editor">
+ <div class="stage card">
+  <div id="tray" class="tray">
+    <div id="tile" class="ptile"><span class="pmini"></span><span>+ Drag locker onto floor</span></div>
+    <button class="btn small alt" id="many">Add a row / batch</button>
+    <label class="snapchk"><input type="checkbox" id="snap" checked> Snap to guides &amp; edges</label>
+    <button class="btn small alt" id="expand" type="button">Expand canvas</button>
+    <span class="trayhint" id="trayhint">Drag a locker back here to remove it</span>
+  </div>
+  <div class="floorwrap" id="wrap">
+    <div class="ruler-x" id="rx"></div>
+    <div class="ruler-y" id="ry"></div>
+    <div class="floor" id="floor">
+      <div class="guide-x" id="gx" hidden></div>
+      <div class="guide-y" id="gy" hidden></div>
+      <div class="drop-slot" id="slot" hidden></div>
+      <div class="coord-tip" id="ctip" hidden></div>
+      <div class="empty-hint" id="ehint" hidden>
+        <div class="eh-box">
+          <b>Empty Floor Plan</b>
+          <p>Drag the <b>+ Drag locker onto floor</b> button above onto any grid slot below, or click <b>Add a row / batch</b> to place a bank of lockers right against each other.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="legend" style="margin-top:14px"><span><i style="background:var(--ok-bg);border:1px solid var(--ok-line)"></i>Free</span><span><i style="background:var(--brand)"></i>Assigned</span><span><i style="background:var(--warn-bg);border:1px solid var(--warn-line)"></i>Needs repair</span>
+  <span class="muted">Payment dot: <i style="background:#22c55e"></i>paid <i style="background:#f59e0b"></i>pending <i style="background:#ef4444"></i>no proof</span></div>
+ </div>
+ <aside class="panel card" id="panel"></aside>
+</div>
+<div id="backdrop" class="backdrop" hidden></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+(function(){
+var LID={{ lay.id }}, CSRF="{{ csrf_token }}", D=null, sel=null, focusName=false;
+var W=72,H=92,STEP_X=72,STEP_Y=92;
+var $=function(i){return document.getElementById(i)};
+function h(tag,attrs,kids){var e=document.createElement(tag);for(var k in (attrs||{})){if(k==='class')e.className=attrs[k];else if(k.slice(0,2)==='on')e[k]=attrs[k];else e.setAttribute(k,attrs[k])}
+ (kids||[]).forEach(function(c){e.appendChild(typeof c==='string'?document.createTextNode(c):c)});return e}
+function toast(m,bad){var t=$('toast');t.textContent=m;t.className='toast'+(bad?' bad':'');t.hidden=false;clearTimeout(t._t);t._t=setTimeout(function(){t.hidden=true},3200)}
+function api(url,body){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF':CSRF},body:JSON.stringify(body||{})})
+ .then(function(r){return r.json()}).then(function(j){if(!j.ok){toast(j.error||'Something went wrong',true);return load().then(function(){return j})}return load().then(function(){return j})})}
+function load(){return fetch('/api/layouts/'+LID).then(function(r){return r.json()}).then(function(d){D=d;render()})}
+function byId(id){return D.lockers.filter(function(l){return l.id===id})[0]}
+
+/* snap to nearest locker edge (flush side-by-side / stacked), alignment, or grid */
+function snapPos(x,y,ignore){
+ x=Math.max(0,Math.round(x));y=Math.max(0,Math.round(y));
+ var gx=null,gy=null,bestDx=16,bestDy=16;
+ if($('snap').checked){
+  D.lockers.forEach(function(l){
+   if(l.id===ignore)return;
+   [l.x, l.x+W, l.x-W].forEach(function(tx){
+    var d=Math.abs(tx-x);
+    if(tx>=0&&d<bestDx){bestDx=d;x=tx;gx=tx}
+   });
+   [l.y, l.y+H, l.y-H].forEach(function(ty){
+    var d=Math.abs(ty-y);
+    if(ty>=0&&d<bestDy){bestDy=d;y=ty;gy=ty}
+   });
+  });
+  if(gx===null)x=Math.round(x/18)*18;
+  if(gy===null)y=Math.round(y/23)*23;
+ }
+ return{x:x,y:y,gx:gx,gy:gy}
+}
+
+/* find nearest non-overlapping spot (allows touching flush at distance W or H) */
+function freeSpot(x,y,ignore){
+ function clash(px,py){return D.lockers.some(function(l){return l.id!==ignore&&Math.abs(l.x-px)<W&&Math.abs(l.y-py)<H})}
+ if(!clash(x,y))return{x:x,y:y};
+ var c=[];for(var dx=-6;dx<=6;dx++)for(var dy=-6;dy<=6;dy++)c.push({x:Math.max(0,x+dx*W),y:Math.max(0,y+dy*H),d:dx*dx+dy*dy});
+ c.sort(function(a,b){return a.d-b.d});
+ for(var i=0;i<c.length;i++)if(!clash(c[i].x,c[i].y))return c[i];
+ return{x:x,y:y}}
+
+/* ---------- pointer drag & drop with live alignment guides ---------- */
+function startDrag(e,kind,l,el){
+ if(e.button>0)return;
+ var sx=e.clientX,sy=e.clientY,active=false,ghost=null,wrap=$('wrap'),floor=$('floor'),offX=W/2,offY=H/2;
+ if(kind==='move'){var r=el.getBoundingClientRect();offX=sx-r.left;offY=sy-r.top}
+ function over(el2,ev){var r=el2.getBoundingClientRect();return ev.clientX>=r.left&&ev.clientX<=r.right&&ev.clientY>=r.top&&ev.clientY<=r.bottom}
+ function pos(ev){var fr=floor.getBoundingClientRect();return{x:ev.clientX-fr.left-offX,y:ev.clientY-fr.top-offY}}
+ function showGuides(sp){
+  var gx=$('gx'),gy=$('gy'),slot=$('slot'),ctip=$('ctip');
+  slot.hidden=false;slot.style.left=sp.x+'px';slot.style.top=sp.y+'px';
+  if(sp.gx!==null){gx.hidden=false;gx.style.left=(sp.gx+W/2)+'px'}else gx.hidden=true;
+  if(sp.gy!==null){gy.hidden=false;gy.style.top=(sp.gy+H/2)+'px'}else gy.hidden=true;
+  ctip.hidden=false;ctip.style.left=(sp.x+W+8)+'px';ctip.style.top=sp.y+'px';
+  ctip.textContent='Col '+Math.round(sp.x/STEP_X+1)+' · Row '+Math.round(sp.y/STEP_Y+1);
+ }
+ function hideGuides(){$('gx').hidden=true;$('gy').hidden=true;$('slot').hidden=true;$('ctip').hidden=true}
+ function mv(ev){
+  if(!active&&Math.hypot(ev.clientX-sx,ev.clientY-sy)>6){active=true;document.body.classList.add('dragging');
+   if(kind==='new'){ghost=h('div',{class:'cell door available ghostlocker'},[h('b',{},['New'])]);document.body.appendChild(ghost)}
+   else{el.classList.add('lifting');$('tray').classList.add('removing')}}
+  if(!active)return;ev.preventDefault();
+  var p=pos(ev),sp=snapPos(p.x,p.y,kind==='move'?l.id:0);
+  if(over(wrap,ev)&&!over($('tray'),ev))showGuides(sp);else hideGuides();
+  if(kind==='new'){ghost.style.transform='translate('+(ev.clientX-offX)+'px,'+(ev.clientY-offY)+'px)'}
+  else{el.style.left=sp.x+'px';el.style.top=sp.y+'px';$('tray').classList.toggle('over',over($('tray'),ev))}
+  var w=wrap.getBoundingClientRect();
+  if(ev.clientX>w.right-36)wrap.scrollLeft+=14;if(ev.clientX<w.left+36)wrap.scrollLeft-=14;if(ev.clientY>w.bottom-36)wrap.scrollTop+=14;if(ev.clientY<w.top+36)wrap.scrollTop-=14}
+ function end(ev,cancel){
+  document.removeEventListener('pointermove',mv);document.removeEventListener('pointerup',up);document.removeEventListener('pointercancel',cn);
+  document.body.classList.remove('dragging');$('tray').classList.remove('removing','over');if(ghost)ghost.remove();hideGuides();
+  if(cancel){if(kind==='move')render();return}
+  if(!active){if(kind==='move'){sel=l.id;focusName=false;render()}return}
+  if(kind==='new'){
+   if(!over(wrap,ev)){return}
+   var p=pos(ev),sp=snapPos(p.x,p.y,0),s=freeSpot(sp.x,sp.y,0);
+   api('/api/layouts/'+LID+'/add',{x:s.x,y:s.y}).then(function(j){if(j.ok){sel=j.id;focusName=true;render()}})}
+  else{
+   if(over($('tray'),ev)){api('/api/lockers/'+l.id+'/remove').then(function(j){if(j.ok){if(sel===l.id)sel=null;render()}});return}
+   if(!over(wrap,ev)){render();return}
+   var q=pos(ev),sq=snapPos(q.x,q.y,l.id),t=freeSpot(sq.x,sq.y,l.id);
+   l.x=t.x;l.y=t.y;render();api('/api/lockers/'+l.id+'/move',{x:t.x,y:t.y})}}
+ function up(ev){end(ev,false)}function cn(ev){end(ev,true)}
+ document.addEventListener('pointermove',mv,{passive:false});document.addEventListener('pointerup',up);document.addEventListener('pointercancel',cn)}
+
+function drawRulers(w,hPx){
+ var rx=$('rx'),ry=$('ry');rx.textContent='';ry.textContent='';
+ rx.style.width=w+'px';ry.style.height=hPx+'px';
+ for(var c=0;c*STEP_X<w;c++){var s=h('span',{style:'left:'+(c*STEP_X)+'px'},['C'+(c+1)]);rx.appendChild(s)}
+ for(var r=0;r*STEP_Y<hPx;r++){var t=h('span',{style:'top:'+(r*STEP_Y)+'px'},['R'+(r+1)]);ry.appendChild(t)}
+}
+
+/* ---------- rendering ---------- */
+function render(){
+ var floor=$('floor'),mx=0,my=0;
+ [].slice.call(floor.querySelectorAll('.cell.door')).forEach(function(n){n.remove()});
+ D.lockers.forEach(function(l){mx=Math.max(mx,l.x);my=Math.max(my,l.y);
+  var kids=[h('b',{},[l.number]),h('small',{},[l.student||(l.status==='maintenance'?'needs repair':'free')])];
+  if(l.status==='assigned')kids.push(h('i',{class:'paydot '+(l.pay_status||'none')}));
+  else{var del=h('button',{class:'delx',title:'Delete locker',onpointerdown:function(e){e.stopPropagation()},onclick:function(e){e.stopPropagation();api('/api/lockers/'+l.id+'/remove').then(function(j){if(j.ok&&sel===l.id)sel=null;render()})}},['×']);kids.push(del)}
+  var c=h('div',{class:'cell door movable '+l.status+(sel===l.id?' sel':''),title:l.number+(l.student?' · '+l.student:'')},kids);
+  c.style.left=l.x+'px';c.style.top=l.y+'px';
+  c.onpointerdown=function(e){startDrag(e,'move',l,c)};
+  floor.appendChild(c)});
+ var fw=Math.max(mx+W+800,1800),fh=Math.max(my+H+600,1100);
+ floor.style.width=fw+'px';floor.style.height=fh+'px';
+ drawRulers(fw,fh);
+ var n=D.lockers.length,a=D.lockers.filter(function(l){return l.status==='assigned'}).length;
+ $('ehint').hidden=n>0;
+ $('summary').textContent=n?(n+' lockers · '+a+' assigned · '+(n-a)+' free'):'Empty floor plan — drag lockers onto the blueprint grid below.';
+ $('trayhint').textContent=n?'Drag a locker here or click its × to delete':'';
+ panel();
+}
+
+function studentList(onPick){
+ var wrap=h('div'),q=h('input',{placeholder:'Search students…',style:'width:100%;margin-bottom:10px'}),list=h('div',{class:'slist'});
+ wrap.appendChild(q);wrap.appendChild(list);
+ function draw(){list.textContent='';var t=q.value.toLowerCase();var rows=D.students.filter(function(s){return !t||(s.name+' '+s.student_no+' '+s.grade).toLowerCase().indexOf(t)>-1});
+  if(!rows.length)list.appendChild(h('p',{class:'muted'},[D.students.length?'No matches.':'No students without a locker. Add students on the Students page.']));
+  rows.slice(0,80).forEach(function(s){list.appendChild(h('button',{class:'srow',onclick:function(){onPick(s)}},[h('span',{},[s.name]),h('small',{},[(s.grade||'')+' '+s.student_no])]))})}
+ q.oninput=draw;draw();return wrap}
+
+function panel(){
+ var p=$('panel'),l=sel&&byId(sel);p.textContent='';
+ p.className='panel card'+(l?' sheet':'');$('backdrop').hidden=!l;
+ if(!l){sel=null;
+  p.appendChild(h('h3',{},['How it works']));
+  var steps=h('ol',{class:'howlist'},[
+   h('li',{},[h('b',{},['Place lockers: ']),'Drag the blue button onto the blueprint grid, or add a batch.']),
+   h('li',{},[h('b',{},['Line them up: ']),'Blue guide lines snap lockers into neat rows and columns automatically.']),
+   h('li',{},[h('b',{},['Name & assign: ']),'Click any locker to rename it, assign a student, or upload proof of payment.'])
+  ]);
+  p.appendChild(steps);return}
+ p.appendChild(lockerPanel(l));
+}
+
+function payBox(l){
+ var box=h('div',{class:'pay'}),st=l.pay_id?l.pay_status:'none';
+ var label={none:'No proof',pending:'Pending review',approved:'Paid',rejected:'Rejected'}[st];
+ box.appendChild(h('div',{class:'row',style:'justify-content:space-between'},[h('h3',{},['Payment']),h('span',{class:'tag pay-'+st},[label])]));
+ if(l.pay_id){
+  box.appendChild(h('p',{class:'muted',style:'margin:8px 0'},[(l.pay_amount?'Amount '+l.pay_amount+' · ':'')+'Uploaded '+(l.pay_date||'')]));
+  var acts=[h('a',{class:'btn small alt',href:'/proof/'+l.pay_id,target:'_blank',rel:'noopener'},['View proof'])];
+  if(st!=='approved')acts.push(h('button',{class:'btn small',onclick:function(){api('/api/payments/'+l.pay_id+'/review',{status:'approved'})}},['Approve']));
+  if(st==='pending')acts.push(h('button',{class:'btn small danger',onclick:function(){api('/api/payments/'+l.pay_id+'/review',{status:'rejected'})}},['Reject']));
+  if(st==='approved')acts.push(h('button',{class:'btn small alt',onclick:function(){api('/api/payments/'+l.pay_id+'/review',{status:'pending'})}},['Undo']));
+  box.appendChild(h('div',{class:'row'},acts));
+ }
+ var file=h('input',{type:'file',accept:'image/*,application/pdf'}),amt=h('input',{placeholder:'Amount (optional)',inputmode:'decimal',style:'width:100%;margin-top:8px'});
+ var btn=h('button',{class:'btn small',style:'margin-top:8px;width:100%',onclick:function(){
+   if(!file.files[0]){toast('Choose a photo or PDF first',true);return}
+   var fd=new FormData();fd.append('file',file.files[0]);fd.append('amount',amt.value);btn.disabled=true;btn.textContent='Uploading…';
+   fetch('/api/assignments/'+l.assignment_id+'/proof',{method:'POST',headers:{'X-CSRF':CSRF},body:fd}).then(function(r){return r.json()}).then(function(j){
+     if(j.ok){toast('Proof uploaded');load()}else{toast(j.error||'Upload failed',true);btn.disabled=false;btn.textContent='Upload proof'}})
+    .catch(function(){toast('Upload failed',true);btn.disabled=false;btn.textContent='Upload proof'})}},['Upload proof']);
+ box.appendChild(h('label',{class:'filebox'},[l.pay_id?'Upload a new proof of payment':'Upload proof of payment',file]));
+ box.appendChild(amt);box.appendChild(btn);
+ return box}
+
+function lockerPanel(l){
+ var box=h('div');
+ var name=h('input',{class:'nameinput',value:l.number,maxlength:'40','aria-label':'Locker name'});
+ function saveName(){var v=name.value.trim();if(v&&v!==l.number)api('/api/lockers/'+l.id+'/edit',{number:v});else if(!v)name.value=l.number}
+ name.onblur=saveName;name.onkeydown=function(e){if(e.key==='Enter')name.blur()};
+ box.appendChild(h('label',{class:'muted',style:'margin-bottom:4px;display:block'},['Locker name (click to edit)']));
+ box.appendChild(h('div',{class:'row',style:'justify-content:space-between;align-items:center;flex-wrap:nowrap'},[name,
+   h('button',{class:'btn small alt',onclick:function(){sel=null;render()}},['Done'])]));
+ box.appendChild(h('div',{style:'margin:10px 0 4px'},[h('span',{class:'tag '+l.status},[l.status==='maintenance'?'needs repair':l.status])]));
+ if(focusName){focusName=false;setTimeout(function(){name.focus();name.select()},60)}
+ if(l.notes&&l.status==='maintenance')box.appendChild(h('p',{class:'muted'},[l.notes]));
+ var remove=h('button',{class:'btn small danger',style:'margin-top:18px',onclick:function(){if(confirm('Remove '+l.number+' from the floor plan?'))api('/api/lockers/'+l.id+'/remove').then(function(j){if(j.ok){sel=null;render()}})}},['Remove locker']);
+ if(l.status==='assigned'){
+   box.appendChild(h('div',{class:'who'},[h('b',{},[l.student]),h('span',{class:'muted'},[(l.grade||'')+' · '+l.student_no])]));
+   box.appendChild(payBox(l));
+   box.appendChild(h('button',{class:'btn alt',style:'margin-top:16px;width:100%',onclick:function(){if(confirm('Release '+l.number+'?'))api('/api/lockers/'+l.id+'/release')}},['Release locker']));
+ }else if(l.status==='available'){
+   box.appendChild(h('h3',{style:'margin:16px 0 8px'},['Assign to a student']));
+   box.appendChild(studentList(function(s){api('/api/lockers/'+l.id+'/assign',{student_id:s.id})}));
+   box.appendChild(h('div',{class:'row',style:'margin-top:16px'},[h('button',{class:'btn small alt',onclick:function(){var n=prompt('What is the problem? (optional)','');if(n!==null)api('/api/lockers/'+l.id+'/maintenance',{on:true,notes:n})}},['Report a problem']),remove]));
+ }else{
+   box.appendChild(h('button',{class:'btn',style:'margin-top:14px;width:100%',onclick:function(){api('/api/lockers/'+l.id+'/maintenance',{on:false})}},['Mark as repaired']));
+   box.appendChild(remove);
+ }
+ return box;
+}
+
+$('backdrop').onclick=function(){sel=null;render()};
+$('tile').onpointerdown=function(e){startDrag(e,'new')};
+$('many').onclick=function(){var s=prompt('How many lockers do you want to add?','10');if(s===null)return;api('/api/layouts/'+LID+'/addmany',{count:s}).then(function(j){if(j.ok)toast('Lockers added. Drag them where you want them.')})};
+$('expand').onclick=function(){var ed=document.querySelector('.editor');var w=ed.classList.toggle('wide');this.textContent=w?'Normal view':'Expand canvas'};
+var title=$('title');
+function saveTitle(){var v=title.value.trim();if(v&&v!==D.layout.name)api('/api/layouts/'+LID+'/rename',{name:v});else if(!v)title.value=D.layout.name}
+title.onblur=saveTitle;title.onkeydown=function(e){if(e.key==='Enter')title.blur()};
+load();
+})();
+</script>
+{% endblock %}

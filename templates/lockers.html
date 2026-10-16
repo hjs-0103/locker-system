@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Lockers{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Lockers</h1><p>{{ lockers|length }} shown</p></div>
+<div class="row"><div class="seg" id="seg"><button data-v="list" class="on">List</button><button data-v="wall">Wall</button></div>
+<a class="btn alt" href="{{ url_for('export', kind='lockers') }}">Export CSV</a></div></div>
+
+<div class="card"><form method="get" class="row">
+<input name="q" value="{{ q }}" placeholder="Search number, location or student" style="flex:1;min-width:220px">
+<select name="status"><option value="">All statuses</option>
+{% for s in ['available','assigned','maintenance'] %}<option {{ 'selected' if s==status }}>{{ s }}</option>{% endfor %}</select>
+<button class="btn">Filter</button></form></div>
+
+<details class="card"><summary>Add lockers</summary>
+<form method="post" action="{{ url_for('locker_add') }}" class="row">
+<input type="hidden" name="_csrf" value="{{ csrf_token }}">
+<input name="prefix" placeholder="Prefix, e.g. A-" size="10">
+<input name="start" type="number" placeholder="From" required style="width:100px">
+<input name="end" type="number" placeholder="To" style="width:100px">
+<input name="location" placeholder="Location, e.g. Block A, floor 1">
+<input name="combination" placeholder="Default combination">
+<button class="btn">Add</button></form></details>
+
+<div class="card wall" id="wall">
+{% for l in lockers %}<div class="door {{ l.status }}" title="{{ l.location }}{% if l.student %} · {{ l.student }}{% endif %}">
+<form method="post" action="{{ url_for('locker_delete', lid=l.id) }}" onsubmit="return confirm('Delete locker {{ l.number }}?')"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="delx" style="display:grid" title="Delete locker">×</button></form>
+<b>{{ l.number }}</b><small>{{ l.student or l.status }}</small></div>
+{% else %}<p class="muted">No lockers found.</p>{% endfor %}
+</div>
+
+<div class="card list" id="list"><table><thead>
+<tr><th>Locker</th><th>Location</th><th>Status</th><th>Student</th><th>Combo</th><th>Actions</th></tr></thead><tbody>
+{% for l in lockers %}<tr>
+<td class="num">{{ l.number }}</td><td>{{ l.location }}</td>
+<td><span class="tag {{ l.status }}">{{ l.status }}</span></td>
+<td>{% if l.student %}{{ l.student }} <span class="muted">{{ l.student_no }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+<td>{{ l.combination }}</td>
+<td class="actions">
+{% if l.status == 'available' %}
+<form method="post" action="{{ url_for('locker_assign', lid=l.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}">
+<select name="student_id" required><option value="">Assign to…</option>{% for s in students %}<option value="{{ s.id }}">{{ s.name }} ({{ s.student_no }})</option>{% endfor %}</select>
+<button class="btn small">Assign</button></form>
+{% elif l.status == 'assigned' %}
+<form method="post" action="{{ url_for('locker_release', lid=l.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="btn small alt">Release</button></form>
+{% endif %}
+{% if l.status != 'assigned' %}
+<form method="post" action="{{ url_for('locker_status', lid=l.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}">
+{% if l.status == 'available' %}<input name="notes" placeholder="Issue" size="9">{% endif %}
+<button class="btn small alt">{{ 'Mark repaired' if l.status=='maintenance' else 'Maintenance' }}</button></form>
+{% endif %}
+<form method="post" action="{{ url_for('locker_delete', lid=l.id) }}" onsubmit="return confirm('Delete locker {{ l.number }}?')"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="btn small danger">Delete</button></form>
+{% if l.notes and l.status=='maintenance' %}<span class="muted">{{ l.notes }}</span>{% endif %}
+</td></tr>
+{% else %}<tr><td colspan="6" class="muted">No lockers found.</td></tr>{% endfor %}
+</tbody></table></div>
+<script>
+(function(){var seg=document.getElementById('seg'),w=document.getElementById('wall'),l=document.getElementById('list');
+function set(v){w.classList.toggle('show',v==='wall');l.classList.toggle('hide',v==='wall');
+[].forEach.call(seg.children,function(b){b.classList.toggle('on',b.dataset.v===v)});localStorage.lv=v}
+seg.onclick=function(e){if(e.target.dataset.v)set(e.target.dataset.v)};set(localStorage.lv||'list')})();
+</script>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}School Office{% endblock %}
+{% block content %}
+<div class="head"><div><h1>School Office & Branding</h1><p>Personalise the workspace with your school's logo, name, term, and house colours.</p></div></div>
+
+<div class="card">
+  <h3>School Identity, Logo & Colours</h3>
+  <form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="action" value="school">
+    <div class="logo-row">
+      <div class="logo-prev">
+        {% if school_logo %}
+          <img src="{{ url_for('school_logo_file') }}?v={{ school_logo }}" alt="{{ school }}">
+        {% else %}
+          <span class="monogram">{{ school[:2]|upper }}</span>
+        {% endif %}
+      </div>
+      <div style="flex:1;min-width:220px">
+        <label style="margin:0">School Crest / Logo <span class="muted">(PNG, JPG or WEBP, max 2 MB)</span>
+          <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" onchange="this.form.submit()">
+        </label>
+      </div>
+    </div>
+    <div class="row" style="gap:16px;align-items:flex-end;margin-top:16px">
+      <label style="flex:2;min-width:220px;margin:0">School Name
+        <input name="school_name" value="{{ school }}" required>
+      </label>
+      <label style="flex:1;min-width:180px;margin:0">Current Term / Year
+        <input name="school_term" value="{{ term }}" placeholder="e.g. Term 1 · 2026">
+      </label>
+    </div>
+    <div style="margin-top:16px">
+      <span style="font-size:13px;font-weight:600;color:#475569;display:block;margin-bottom:8px">School Colour Theme</span>
+      <div class="swatches">
+        {% for key, cols in themes.items() %}
+        <label class="swatch {{ 'on' if theme==key }}">
+          <input type="radio" name="theme" value="{{ key }}" {{ 'checked' if theme==key }} onchange="this.form.submit()">
+          <i style="background:{{ cols[0] }}"></i>
+          <span>{{ key|capitalize }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    <button class="btn" style="margin-top:16px">Save school profile</button>
+  </form>
+  {% if school_logo %}
+  <form method="post" style="margin-top:10px">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="action" value="remove_logo">
+    <button class="btn small alt">Remove current logo</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card"><h3>Office Staff & Bursars</h3>
+<table><thead><tr><th>Username</th><th>Role</th></tr></thead><tbody>{% for u in users %}<tr><td><b>{{ u.username }}</b></td><td><span class="tag {{ 'assigned' if u.role=='admin' else 'available' }}">{{ 'Bursar / Admin' if u.role=='admin' else 'Office Staff' }}</span></td></tr>{% endfor %}</tbody></table>
+<form method="post" class="row" style="margin-top:16px"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="action" value="user">
+<input name="username" placeholder="Username" required><input name="password" type="password" placeholder="Password" required>
+<select name="role"><option value="staff">Office Staff</option><option value="admin">Bursar / Admin</option></select><button class="btn">Add staff member</button></form></div>
+
+<div class="card"><h3>Change My Password</h3><form method="post" class="row">
+<input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="action" value="password">
+<input name="password" type="password" placeholder="New password" required><button class="btn">Update password</button></form></div>
+
+<div class="card"><h3>End-of-Year Locker Clearance</h3><p class="muted" style="margin-bottom:12px">Releases every assigned locker for the new academic year while keeping the full logbook history intact.</p>
+<form method="post" onsubmit="return confirm('Release ALL lockers for the new school year?')"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="action" value="year_end">
+<button class="btn danger">Clear & release all lockers</button></form></div>
+{% endblock %}

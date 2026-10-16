@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}History{% endblock %}
+{% block content %}
+<div class="head"><div><h1>History</h1><p>Latest 500 assignments</p></div>
+<a class="btn alt" href="{{ url_for('export', kind='history') }}">Export CSV</a></div>
+<div class="card"><table><thead>
+<tr><th>Locker</th><th>Location</th><th>Student</th><th>Assigned</th><th>Released</th><th>By</th></tr></thead><tbody>
+{% for r in rows %}<tr><td class="num">{{ r.number }}</td><td>{{ r.location }}</td><td>{{ r.name }} <span class="muted">{{ r.student_no }}</span></td>
+<td>{{ r.assigned_at }}</td><td>{% if r.released_at %}{{ r.released_at }}{% else %}<span class="tag assigned">Active</span>{% endif %}</td><td>{{ r.assigned_by }}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">Nothing yet.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

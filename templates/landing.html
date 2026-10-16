@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Locker management for schools{% endblock %}
+{% block public %}
+<div class="land">
+<div class="top"><div class="logo"><span class="mark">{{ icon('lock') }}</span><span><small>Locker Manager</small>for schools</span></div>
+<div class="row"><a class="btn alt" href="{{ url_for('login') }}">Sign in</a><a class="btn" href="{{ url_for('signup') }}">Get started free</a></div></div>
+<section class="hero">
+<div><h1>Locker management that's <em>actually easy</em>.</h1>
+<p>Draw your locker layout, click a locker, pick a student. That's it. No spreadsheets, no lost keys.</p>
+<div class="cta"><a class="btn big" href="{{ url_for('signup') }}">Create your workspace</a><a class="btn alt big" href="{{ url_for('login') }}">Sign in</a></div></div>
+<div class="wallpv wall show" style="display:grid">
+{% for s in ['assigned','assigned','available','assigned','maintenance','assigned','available','assigned','assigned','assigned','available','assigned','assigned','available','assigned','assigned','assigned','maintenance'] %}
+<div class="door {{ s }}"><b>{{ loop.index + 100 }}</b></div>{% endfor %}
+</div></section>
+<section class="feat">
+<div><span class="ic">{{ icon('plan') }}</span><h3>Build your layout</h3><p>Design floor plans on a grid and assign students right where the lockers are.</p></div>
+<div><span class="ic">{{ icon('upload') }}</span><h3>Import your roster</h3><p>Upload a CSV of students and number whole banks of lockers in one click.</p></div>
+<div><span class="ic">{{ icon('refresh') }}</span><h3>Year-end reset</h3><p>Release every locker for the new school year in one click. History is always kept.</p></div>
+</section></div>
+{% endblock %}

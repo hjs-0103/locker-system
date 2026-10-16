@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Students{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Students</h1><p>{{ students|length }} active</p></div></div>
+<div class="card"><form method="get" class="row">
+<input name="q" value="{{ q }}" placeholder="Search name, number or grade" style="flex:1;min-width:220px"><button class="btn">Search</button></form></div>
+
+<details class="card"><summary>Add student</summary>
+<form method="post" action="{{ url_for('student_add') }}" class="row">
+<input type="hidden" name="_csrf" value="{{ csrf_token }}">
+<input name="student_no" placeholder="Student no." required><input name="name" placeholder="Full name" required>
+<input name="grade" placeholder="Grade / class"><input name="email" type="email" placeholder="Email">
+<button class="btn">Add</button></form></details>
+
+<details class="card"><summary>Import from CSV</summary>
+<p class="muted">First row must be: <code>student_no,name,grade,email</code></p>
+<form method="post" action="{{ url_for('student_import') }}" enctype="multipart/form-data" class="row">
+<input type="hidden" name="_csrf" value="{{ csrf_token }}">
+<input type="file" name="file" accept=".csv" required><button class="btn">Import</button></form></details>
+
+<div class="card"><table><thead>
+<tr><th>No.</th><th>Name</th><th>Grade</th><th>Email</th><th>Locker</th><th></th></tr></thead><tbody>
+{% for s in students %}<tr><td>{{ s.student_no }}</td><td><b style="font-weight:500">{{ s.name }}</b></td><td>{{ s.grade }}</td><td>{{ s.email }}</td>
+<td>{% if s.locker %}<span class="tag assigned">{{ s.locker }}</span>
+<form method="post" action="{{ url_for('locker_release', lid=s.locker_id) }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="btn small alt">Release</button></form>
+{% else %}
+<form method="post" class="inline" onsubmit="this.action='/lockers/'+this.lid.value+'/assign'">
+<input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="student_id" value="{{ s.id }}">
+<select name="lid" required><option value="">Assign locker…</option>{% for l in free %}<option value="{{ l.id }}">{{ l.number }} {{ l.location }}</option>{% endfor %}</select>
+<button class="btn small">Assign</button></form>{% endif %}</td>
+<td><form method="post" action="{{ url_for('student_deactivate', sid=s.id) }}" onsubmit="return confirm('Archive student and free locker?')"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="btn small danger">Archive</button></form></td></tr>
+{% else %}<tr><td colspan="6" class="muted">No students yet.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Lockers{% endblock %} — {{ school }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<style>:root{--brand:{{ colors[0] }};--brand-d:{{ colors[1] }};--brand-soft:{{ colors[2] }}}</style>
+</head>
+<body>
+{% block body %}
+{% if session.user %}
+<header class="masthead">
+  <div class="masthead-top">
+    <a href="{{ url_for('dashboard') }}" class="crest">
+      {% if school_logo %}
+        <img class="school-logo" src="{{ url_for('school_logo_file') }}?v={{ school_logo }}" alt="{{ school }}">
+      {% else %}
+        <span class="monogram">{{ school[:2]|upper }}</span>
+      {% endif %}
+      <div class="crest-meta">
+        <b>{{ school }}</b>
+        <small>{{ term }} · Locker Registry</small>
+      </div>
+    </a>
+    <form method="post" action="{{ url_for('logout') }}" class="user">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <span class="user-chip"><b>{{ session.user }}</b> · {{ 'Admin' if session.role=='admin' else 'Staff' }}</span>
+      <button title="Sign out">Sign out</button>
+    </form>
+  </div>
+  <nav class="topnav">
+    {% set ep = request.endpoint %}
+    <a href="{{ url_for('dashboard') }}" class="{{ 'on' if ep=='dashboard' }}">Overview</a>
+    <a href="{{ url_for('layouts') }}" class="{{ 'on' if ep in ('layouts','layout_edit') }}">Floor Plans</a>
+    <a href="{{ url_for('lockers') }}" class="{{ 'on' if ep=='lockers' }}">All Lockers</a>
+    <a href="{{ url_for('students') }}" class="{{ 'on' if ep=='students' }}">Students</a>
+    <a href="{{ url_for('payments') }}" class="{{ 'on' if ep=='payments' }}">Payments</a>
+    <a href="{{ url_for('history') }}" class="{{ 'on' if ep=='history' }}">History</a>
+    {% if session.role == 'admin' %}<a href="{{ url_for('settings') }}" class="{{ 'on' if ep=='settings' }}">School Settings</a>{% endif %}
+  </nav>
+</header>
+<main class="content">
+{% for cat, msg in get_flashed_messages(with_categories=true) %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+{% block content %}{% endblock %}
+</main>
+{% else %}
+{% for cat, msg in get_flashed_messages(with_categories=true) %}<div class="flash {{ cat }}" style="margin:16px auto;max-width:440px">{{ msg }}</div>{% endfor %}
+{% block public %}{% endblock %}
+{% endif %}
+{% endblock %}
+<script>
+document.querySelectorAll('table').forEach(function(t){var hs=[].map.call(t.querySelectorAll('thead th'),function(h){return h.textContent.trim()});
+ t.querySelectorAll('tbody tr').forEach(function(r){[].forEach.call(r.children,function(td,i){if(hs[i])td.setAttribute('data-label',hs[i])})})});
+</script>
+</body></html>

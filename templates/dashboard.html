@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ school }}</h1>
+    <p>{{ today }} · {{ term }}</p>
+  </div>
+  <div class="row">
+    {% if session.role == 'admin' and not school_logo %}
+      <a class="btn alt" href="{{ url_for('settings') }}">Upload school logo</a>
+    {% endif %}
+    <a class="btn alt" href="{{ url_for('students') }}">Students ({{ stats.students }})</a>
+    <a class="btn" href="{{ url_for('layouts') }}">Floor plans →</a>
+  </div>
+</div>
+
+<div class="ledger-strip">
+  <div class="ls-cell">
+    <small>Total Lockers</small>
+    <b>{{ stats.total }}</b>
+  </div>
+  <div class="ls-cell ok">
+    <small>Available</small>
+    <b>{{ stats.available }}</b>
+  </div>
+  <div class="ls-cell busy">
+    <small>Assigned</small>
+    <b>{{ stats.assigned }}</b>
+  </div>
+  <div class="ls-cell warn">
+    <small>Needs Repair</small>
+    <b>{{ stats.maintenance }}</b>
+  </div>
+  <div class="ls-cell">
+    <small>Unassigned Students</small>
+    <b>{{ stats.unassigned }}</b>
+  </div>
+  <a href="{{ url_for('payments') }}" class="ls-cell link-cell">
+    <small>Pending Payments</small>
+    <b>{{ stats.pending_pays }}</b>
+  </a>
+</div>
+
+<div class="workbench">
+  <section class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:14px">
+      <h3>Hallway Floor Plans</h3>
+      <a href="{{ url_for('layouts') }}" class="muted">View all →</a>
+    </div>
+    {% if plans %}
+      <div class="plan-rows">
+        {% for p in plans %}
+        <a href="{{ url_for('layout_edit', lid=p.id) }}" class="plan-row">
+          <div>
+            <b>{{ p.name }}</b>
+            <span class="muted">{{ p.total }} lockers · {{ p.free or 0 }} free · {{ p.assigned or 0 }} assigned</span>
+          </div>
+          <span class="btn small alt">Open map →</span>
+        </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted" style="margin:0 0 14px">No hallway floor plans created yet. Create your first corridor or building floor below to start dragging lockers onto the grid.</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('layout_create') }}" class="row" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <input name="name" placeholder="New floor plan name (e.g. Ground Floor East)" style="flex:1" required>
+      <button class="btn small">+ Create plan</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <h3>Recent Assignments</h3>
+      <a href="{{ url_for('history') }}" class="muted">Full history →</a>
+    </div>
+    <table>
+      <thead><tr><th>Locker</th><th>Student</th><th>Assigned</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for r in recent %}
+        <tr>
+          <td><span class="plate">{{ r.number }}</span></td>
+          <td><b>{{ r.name }}</b></td>
+          <td class="muted">{{ r.assigned_at }}</td>
+          <td>{% if r.released_at %}<span class="muted">Returned</span>{% else %}<span class="tag assigned">Active</span>{% endif %}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="muted">No lockers assigned yet. Click any floor plan on the left to assign a locker.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block public %}
+<div class="auth-page">
+  <div class="auth-box">
+    <div class="auth-head">
+      <span class="monogram">LM</span>
+      <div>
+        <h1>Sign in</h1>
+        <p class="muted">Enter your school code and staff credentials.</p>
+      </div>
+    </div>
+    <form method="post">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <label>School code
+        <input name="school" required autofocus placeholder="e.g. default or oakridge-high" autocapitalize="off">
+      </label>
+      <label>Username
+        <input name="username" required>
+      </label>
+      <label>Password
+        <input name="password" type="password" required>
+      </label>
+      <button class="btn" style="width:100%;margin-top:4px;padding:10px">Sign in to workspace →</button>
+    </form>
+    <div class="auth-foot">
+      Setting up a new school? <a href="{{ url_for('signup') }}">Register a school</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

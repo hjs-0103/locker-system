@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Floor plans{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Floor plans</h1><p>Draw where your lockers are, then assign students.</p></div></div>
+
+<form method="post" action="{{ url_for('layout_create') }}" class="card row newplan">
+<input type="hidden" name="_csrf" value="{{ csrf_token }}">
+<input name="name" placeholder="Name your floor plan, e.g. Main hallway" required style="flex:1;min-width:200px">
+<button class="btn">Create floor plan</button></form>
+
+<div class="plans">
+{% for y in layouts %}
+<a class="plancard" href="{{ url_for('layout_edit', lid=y.id) }}">
+  <div class="mini" style="aspect-ratio:{{ y.ratio }}">{% for d in y.dots %}<i class="{{ d.s }}" style="left:{{ d.x }}%;top:{{ d.y }}%"></i>{% endfor %}</div>
+  <h3>{{ y.name }}</h3>
+  <p class="muted">{{ y.total }} lockers · {{ y.assigned }} assigned</p>
+</a>
+{% else %}<p class="muted">No floor plans yet. Name your first one above.</p>{% endfor %}
+</div>
+
+{% if session.role == 'admin' and layouts %}
+<details class="card"><summary>Delete a floor plan</summary>
+{% for y in layouts %}<form method="post" action="{{ url_for('layout_delete', lid=y.id) }}" class="row" style="margin-bottom:8px" onsubmit="return confirm('Delete {{ y.name|e }} and its unused lockers?')">
+<input type="hidden" name="_csrf" value="{{ csrf_token }}"><span style="min-width:200px">{{ y.name }}</span><button class="btn small danger">Delete</button></form>{% endfor %}
+</details>{% endif %}
+{% endblock %}

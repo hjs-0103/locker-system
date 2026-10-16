@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Payments{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Payments</h1><p>Review proof of payment uploaded for lockers.</p></div></div>
+
+<div class="seg tabs">
+{% for key,label in [('pending','Pending'),('approved','Approved'),('rejected','Rejected'),('all','All')] %}
+<a href="{{ url_for('payments', status=key) }}" class="{{ 'on' if st==key }}">{{ label }}{% if key!='all' %} <span class="cnt">{{ counts.get(key,0) }}</span>{% endif %}</a>{% endfor %}
+</div>
+
+<div class="card" style="margin-top:18px"><table><thead>
+<tr><th>Student</th><th>Locker</th><th>Amount</th><th>Uploaded</th><th>Status</th><th>Proof</th><th></th></tr></thead><tbody>
+{% for p in rows %}<tr>
+<td><b style="font-weight:600">{{ p.name }}</b> <span class="muted">{{ p.student_no }}</span></td>
+<td class="num">{{ p.number }}</td><td>{{ p.amount or '—' }}</td>
+<td>{{ p.uploaded_at }}<br><span class="muted">by {{ p.uploaded_by }}</span></td>
+<td><span class="tag pay-{{ p.status }}">{{ {'pending':'Pending','approved':'Paid','rejected':'Rejected'}[p.status] }}</span></td>
+<td><a class="btn small alt" href="{{ url_for('proof_file', pid=p.id) }}" target="_blank" rel="noopener">View</a></td>
+<td class="actions">
+{% if p.status != 'approved' %}<form method="post" action="{{ url_for('payment_review', pid=p.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="status" value="approved"><button class="btn small">Approve</button></form>{% endif %}
+{% if p.status == 'pending' %}<form method="post" action="{{ url_for('payment_review', pid=p.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="status" value="rejected"><button class="btn small danger">Reject</button></form>{% endif %}
+</td></tr>
+{% else %}<tr><td colspan="7" class="muted">Nothing here.</td></tr>{% endfor %}
+</tbody></table></div>
+
+<div class="card"><h3>Assigned lockers without proof ({{ unpaid|length }})</h3>
+<table><thead><tr><th>Student</th><th>Locker</th><th>Location</th><th>Assigned</th></tr></thead><tbody>
+{% for u in unpaid %}<tr><td>{{ u.name }} <span class="muted">{{ u.student_no }}</span></td><td class="num">{{ u.number }}</td><td>{{ u.location }}</td><td>{{ u.assigned_at }}</td></tr>
+{% else %}<tr><td colspan="4" class="muted">Everyone has uploaded proof.</td></tr>{% endfor %}
+</tbody></table>
+<p class="muted" style="margin-top:12px">Upload proof by opening the locker on its floor plan.</p></div>
+{% endblock %}
+
